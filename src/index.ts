@@ -1,8 +1,9 @@
 import 'dotenv/config';
-import { TwitterApi } from 'twitter-api-v2';
+import { TwitterApi, TwitterApiv2 } from 'twitter-api-v2';
 import { differenceInDays } from 'date-fns';
+import { utcToZonedTime } from 'date-fns-tz';
 
-function userLogin() {
+function userLogin(): TwitterApiv2 {
     const userClient = new TwitterApi({
         appKey: process.env.API_KEY || '',
         appSecret: process.env.API_KEY_SECRET || '',
@@ -13,7 +14,7 @@ function userLogin() {
     return userClient.v2;
 }
 
-async function tweet() {
+async function tweet(): Promise<void> {
     const releaseDay = new Date(2022, 7, 12);
     const daysToRelease = differenceInDays(releaseDay, new Date());
     
@@ -27,9 +28,14 @@ async function tweet() {
 
 const clientV2 = userLogin();
 const now = new Date();
+const timeZone = 'America/Sao_Paulo';
 
-let millisToNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0).getTime() - Date.now();
+const dateToPostInUTC = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 15, 0, 0, 0);
+const dateToPostInBrazilTimezone = utcToZonedTime(dateToPostInUTC, timeZone);
+
+let millisToNoon = dateToPostInBrazilTimezone.getTime() - utcToZonedTime(now, timeZone).getTime();
 const oneDayInMili = 86400000;
+
 if (millisToNoon < 0) {
     millisToNoon += oneDayInMili;
 }
