@@ -36,24 +36,45 @@ async function tweet(): Promise<void> {
     console.log('Tweet', createdTweet.id, ':', createdTweet.text);
 }
 
-async function replyTweet(): Promise<void> {
+async function replyTweets(): Promise<void> {
     const botInformations = await clientV2.me();
     const botId = botInformations.data.id;
-    const tweetsMentionedBot = await clientV2.userMentionTimeline(botId, {expansions: "referenced_tweets.id.author_id"});
+    const tweetsMentionedBot = await clientV2.userMentionTimeline(botId, {expansions: ["in_reply_to_user_id", "referenced_tweets.id.author_id"], max_results: 30, "tweet.fields": "conversation_id"});
 
     for await (const tweet of tweetsMentionedBot.tweets) {
-        if(tweet.text.match('^@QuantosPara [^@]')){
-            let message = "";
-            if(tweet.author_id){
-                const guest = getGuest(tweet.author_id);
-                if(guest){
-                    message = guest.message;
+        const conversation_id = tweet.conversation_id;
+        const mentionBotFirst = tweet.in_reply_to_user_id === botId;
+        
+        if(mentionBotFirst && conversation_id) {
+            const conversation = await clientV2.get(`tweets/search/recent?query=conversation_id:${conversation_id}&tweet.fields=in_reply_to_user_id,author_id`)
+            
+            let botAlreadyReply = false;
+            if(conversation.data){
+                for(const conversationTweets of conversation.data){
+                    if(conversationTweets.author_id === botId){
+                        botAlreadyReply = true;
+                        break;
+                    }
                 }
             }
+            
+            if(!botAlreadyReply){
+                let message = "";
+                if(tweet.author_id){
+                    const guest = getGuest(tweet.author_id);
+                    if(guest){
+                        message = guest.message;
+                    }
+                }
 
-            const tweetId = tweet.id;
-            await clientV2.reply(messageToMention(message), tweetId);
-            console.log(`Reply to ${tweetId} with message ${message}`);
+                const tweetId = tweet.id;
+                await clientV2.reply(messageToMention(message), tweetId);
+                console.log(`Reply to ${tweetId} with message ${messageToMention(message)}`);
+            }
+            // else{
+            //     console.log('Bot already reply this tweet');
+            // }
+            
         }
     } 
 }
@@ -72,9 +93,18 @@ if (millisToNoon < 0) {
     millisToNoon += oneDayInMili;
 }
 
-replyTweet();
+try {
+    const halfMinuteInMili = 30000;
+    setInterval(replyTweets, halfMinuteInMili);
+} catch(err){
+    console.log(err)
+}
 
-// setTimeout(() => {
-//     tweet();
-//     setInterval(tweet, oneDayInMili);
-// }, millisToNoon);
+try {
+    setTimeout(() => {
+        tweet();
+        setInterval(tweet, oneDayInMili);
+    }, millisToNoon);
+} catch(err){
+    console.log(err)
+}
