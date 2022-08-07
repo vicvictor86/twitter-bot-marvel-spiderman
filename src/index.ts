@@ -1,18 +1,23 @@
 import 'dotenv/config';
 import { TwitterApi, TwitterApiv2 } from 'twitter-api-v2';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, formatISO, sub } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import getGuest from './SpecialGuests';
 
 function calculateDaysToRelease(): number {
-    const releaseDay = new Date(2022, 7, 12);
-    const daysToRelease = differenceInDays(releaseDay, new Date());
+    const releaseDay = new Date(2022, 7, 12, 12);
+	const now = new Date()
+	const dateInUTC = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    const daysToRelease = differenceInDays(releaseDay, dateInUTC);
 
     return daysToRelease;
 }
 
 function messageToMention(message?: string): string {
     const daysToRelease = calculateDaysToRelease();
+	if(!message){
+		message = "";
+	}
     return message + `Faltam ${daysToRelease} dias para o lançamento de Marvel's Spider-Man Remastered!`
 }
 
@@ -39,16 +44,16 @@ async function tweet(): Promise<void> {
 async function replyTweets(): Promise<void> {
     const botInformations = await clientV2.me();
     const botId = botInformations.data.id;
-    const tweetsMentionedBot = await clientV2.userMentionTimeline(botId, {expansions: ["in_reply_to_user_id", "referenced_tweets.id.author_id"], max_results: 30, "tweet.fields": "conversation_id"});
-
+    const start_time = formatISO(sub(new Date(), {minutes: 2}));
+    const tweetsMentionedBot = await clientV2.userMentionTimeline(botId, {expansions: ["in_reply_to_user_id", "referenced_tweets.id.author_id"], max_results: 30, "tweet.fields": "conversation_id", start_time});
+    console.log(tweetsMentionedBot.meta.result_count);
     for await (const tweet of tweetsMentionedBot.tweets) {
         const conversation_id = tweet.conversation_id;
         const mentionBotFirst = tweet.in_reply_to_user_id === botId;
-        
         if(mentionBotFirst && conversation_id) {
             const conversation = await clientV2.get(`tweets/search/recent?query=conversation_id:${conversation_id}&tweet.fields=in_reply_to_user_id,author_id`)
-            
             let botAlreadyReply = false;
+            
             if(conversation.data){
                 for(const conversationTweets of conversation.data){
                     if(conversationTweets.author_id === botId){
@@ -81,12 +86,13 @@ async function replyTweets(): Promise<void> {
 
 const clientV2 = userLogin();
 const now = new Date();
+const nowInUTC = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds(), now.getUTCMilliseconds());
 const timeZone = 'America/Sao_Paulo';
 
 const dateToPostInUTC = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 15, 0, 0, 0);
 const dateToPostInBrazilTimezone = utcToZonedTime(dateToPostInUTC, timeZone);
 
-let millisToNoon = dateToPostInBrazilTimezone.getTime() - utcToZonedTime(now, timeZone).getTime();
+let millisToNoon = dateToPostInBrazilTimezone.getTime() - utcToZonedTime(nowInUTC, timeZone).getTime();
 const oneDayInMili = 86400000;
 
 if (millisToNoon < 0) {

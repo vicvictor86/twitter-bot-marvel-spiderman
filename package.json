@@ -10,6 +10,7 @@
     "start": "ts-node-dev --transpile-only --ignore-watch node_modules src/index.ts"
   },
   "dependencies": {
+    "@twitter-api-v2/plugin-rate-limit": "^1.1.0",
     "@types/node": "^18.0.6",
     "@types/twitter": "^1.7.1",
     "date-fns": "^2.28.0",
